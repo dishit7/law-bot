@@ -142,17 +142,17 @@ export default function Home() {
     Boolean(documentBuffer);
 
   return (
-    <div className="min-h-screen bg-white py-12">
-      <main className="mx-auto flex w-full max-w-7xl flex-col gap-10 px-6 text-gray-900">
-        <header className="space-y-2">
-          <h1 className="text-3xl font-semibold">Lexsy Placeholder Assistant</h1>
-          <p className="text-sm text-gray-600">
+    <div className="min-h-screen bg-slate-50 py-12">
+      <main className="mx-auto flex w-full max-w-7xl flex-col gap-12 px-8 text-slate-900">
+        <header className="space-y-3">
+          <h1 className="text-3xl font-semibold text-slate-900">Lexsy Placeholder Assistant</h1>
+          <p className="text-sm text-slate-600">
             Upload a SAFE draft, let Gemini surface placeholders, fill them conversationally, and
             export a completed document.
           </p>
         </header>
 
-        <section className="space-y-8 lg:grid lg:grid-cols-[minmax(0,3fr)_minmax(400px,1.15fr)] lg:items-start lg:gap-8">
+        <section className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,3fr)_minmax(380px,1fr)] lg:items-start">
           <div className="space-y-6">
             <UploadPanel
               fileName={fileName}
@@ -164,12 +164,12 @@ export default function Home() {
               hasSelectedFile={Boolean(selectedFile)}
             />
 
-            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="space-y-6 rounded-lg bg-white p-6 shadow-lg">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-gray-900">
+                <h2 className="text-lg font-semibold text-slate-900">
                   4. Chat to fill placeholders
                 </h2>
-                <span className="text-xs uppercase tracking-wide text-gray-500">
+                <span className="text-xs font-medium uppercase tracking-wide text-slate-500">
                   {placeholders.length > 0
                     ? answeredCount === placeholders.length
                       ? "All placeholders confirmed"

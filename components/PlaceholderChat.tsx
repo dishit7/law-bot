@@ -80,24 +80,24 @@ export default function PlaceholderChat({
     !placeholder || isLoading || status === "pendingConfirmation" || allConfirmed;
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 sm:p-6">
+    <div className="space-y-5">
+      <div className="rounded-lg bg-white p-6 shadow-lg">
         {!placeholder ? (
           <p className="text-sm text-slate-500">
             Select a placeholder from the list to begin the conversation.
           </p>
         ) : (
           <>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-slate-500">Active placeholder</p>
-                <h3 className="text-lg font-semibold text-slate-900">
-                  {placeholder.fieldName}
-                </h3>
-                <p className="text-sm text-slate-500">{placeholderPrompt}</p>
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-1">
+                <p className="text-xs font-medium uppercase tracking-wide text-blue-600">
+                  Active placeholder
+                </p>
+                <h3 className="text-xl font-semibold text-slate-900">{placeholder.fieldName}</h3>
+                <p className="text-sm text-slate-600">{placeholderPrompt}</p>
               </div>
               <div className="text-right">
-                <p className="text-xs uppercase tracking-wide text-slate-400">
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
                   {currentIndex && totalCount
                     ? `Field ${currentIndex} of ${totalCount}`
                     : "Placeholder"}
@@ -105,26 +105,35 @@ export default function PlaceholderChat({
               </div>
             </div>
 
-            <div className="mt-4 space-y-3">
+            <div className="mt-6 space-y-4">
               {conversation.length === 0 ? (
-                <p className="rounded-lg bg-white px-3 py-2 text-sm text-slate-500 shadow-sm">
+                <p className="rounded-lg bg-slate-100 px-4 py-3 text-sm text-slate-600">
                   I’ll walk you through filling this field once you respond.
                 </p>
               ) : (
-                conversation.map((message, index) => (
-                  <div key={`${message.role}-${index}`} className="flex flex-col gap-1">
-                    <span
-                      className={`text-xs font-semibold uppercase tracking-wide ${
-                        message.role === "ai" ? "text-blue-600" : "text-slate-500"
-                      }`}
-                    >
-                      {message.role === "ai" ? "Lexsy Assistant" : "You"}
-                    </span>
-                    <p className="rounded-lg bg-white/80 px-3 py-2 text-sm text-slate-700 shadow-sm">
-                      {message.text}
-                    </p>
-                  </div>
-                ))
+                conversation.map((message, index) => {
+                  const isAssistant = message.role === "ai";
+                  return (
+                    <div key={`${message.role}-${index}`} className="flex flex-col gap-1">
+                      <span
+                        className={`text-xs font-medium uppercase tracking-wide ${
+                          isAssistant ? "text-blue-600" : "text-slate-600"
+                        }`}
+                      >
+                        {isAssistant ? "Lexsy Assistant" : "You"}
+                      </span>
+                      <p
+                        className={`rounded-lg px-4 py-3 text-sm text-slate-800 shadow-sm ${
+                          isAssistant
+                            ? "bg-slate-100"
+                            : "bg-white ring-1 ring-inset ring-slate-200"
+                        }`}
+                      >
+                        {message.text}
+                      </p>
+                    </div>
+                  );
+                })
               )}
             </div>
           </>
@@ -132,23 +141,23 @@ export default function PlaceholderChat({
       </div>
 
       {status === "pendingConfirmation" && placeholder && (
-        <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+        <div className="space-y-4 rounded-lg bg-white p-6 shadow-lg">
           <p className="text-sm text-slate-600">
             I understood that the {placeholder.fieldName.toLowerCase()} should be:
           </p>
-          <p className="rounded-lg bg-slate-50 px-3 py-2 text-base font-semibold text-slate-900">
+          <p className="rounded-lg bg-slate-50 px-4 py-3 text-base font-semibold text-slate-900 ring-1 ring-inset ring-slate-200">
             {proposedAnswer}
           </p>
           <div className="flex flex-col gap-2 sm:flex-row">
             <button
               onClick={handleConfirmClick}
-              className="inline-flex items-center justify-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500"
+              className="inline-flex w-full items-center justify-center rounded-lg bg-green-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-white sm:w-auto"
             >
               ✓ Yes, looks good
             </button>
             <button
               onClick={handleEditClick}
-              className="inline-flex items-center justify-center rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-slate-400 hover:text-slate-700"
+              className="inline-flex w-full items-center justify-center rounded-lg bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-white sm:w-auto"
             >
               Edit / Try again
             </button>
@@ -158,7 +167,7 @@ export default function PlaceholderChat({
 
       <form
         onSubmit={handleSubmit}
-        className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:p-6"
+        className="flex flex-col gap-3 rounded-lg bg-white p-4 shadow-lg sm:flex-row sm:items-center sm:gap-4 sm:p-5"
       >
         <input
           type="text"
@@ -177,12 +186,12 @@ export default function PlaceholderChat({
               : placeholderPrompt || "Select a placeholder to start"
           }
           disabled={disableInput}
-          className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
+          className="flex-1 rounded-lg bg-slate-50 px-4 py-2.5 text-sm text-slate-800 ring-1 ring-inset ring-slate-300 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-white disabled:cursor-not-allowed disabled:bg-slate-100"
         />
         <button
           type="submit"
           disabled={disableInput || !input.trim()}
-          className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-slate-300"
+          className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-white disabled:cursor-not-allowed disabled:bg-blue-300"
         >
           {isLoading ? "Thinking..." : "Send"}
         </button>
@@ -194,5 +203,3 @@ export default function PlaceholderChat({
     </div>
   );
 }
-
-
