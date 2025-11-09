@@ -9,5 +9,3 @@ export type PlaceholderAnswer = {
   value: string;
   conversation: ChatMessage[];
 };
-
-
