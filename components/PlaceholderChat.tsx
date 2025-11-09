@@ -5,7 +5,6 @@ import type { PlaceholderField } from "@/lib/ai";
 import type {
   ChatMessage,
   PlaceholderAnswer,
-  PlaceholderStatus,
 } from "@/types/placeholders";
 
 type PlaceholderChatProps = {

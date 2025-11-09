@@ -21,6 +21,9 @@ export default function Home() {
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [downloadStatus, setDownloadStatus] = useState<string | null>(null);
+  const downloadFileName = fileName
+    ? fileName.replace(/\.docx$/i, "_completed.docx")
+    : "lexsy-completed-safe.docx";
 
   const {
     placeholders,
@@ -38,10 +41,6 @@ export default function Home() {
     handleEditActiveAnswer,
     handleJumpToPlaceholder,
   } = usePlaceholderFlow();
-
-  const downloadFileName = fileName
-    ? fileName.replace(/\.docx$/i, "_completed.docx")
-    : "lexsy-completed-safe.docx";
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -143,13 +142,13 @@ export default function Home() {
     Boolean(documentBuffer);
 
   return (
-    <div className="min-h-screen bg-slate-100 py-12">
-      <main className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 text-slate-800">
-        <header className="space-y-3">
-          <h1 className="text-3xl font-semibold text-slate-900">Lexsy Placeholder Finder</h1>
-          <p className="text-base text-slate-600">
-            Upload a SAFE draft, extract the raw text, and let Gemini identify template
-            placeholders. This is the foundation for the interactive filling workflow.
+    <div className="min-h-screen bg-white py-12">
+      <main className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 text-gray-900">
+        <header className="space-y-2">
+          <h1 className="text-3xl font-semibold">Lexsy Placeholder Assistant</h1>
+          <p className="text-sm text-gray-600">
+            Upload a SAFE draft, let Gemini surface placeholders, fill them conversationally, and
+            export a completed document.
           </p>
         </header>
 
@@ -164,26 +163,6 @@ export default function Home() {
         />
 
         <section className="grid gap-6 md:grid-cols-2">
-          <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-slate-900">2. Extracted text</h2>
-              <span className="text-xs uppercase tracking-wide text-slate-400">
-                {documentText ? `${documentText.length} chars` : "Awaiting upload"}
-              </span>
-            </div>
-            <div className="rounded-xl border border-slate-100 bg-slate-50 p-4 text-sm text-slate-700">
-              {documentText ? (
-                <pre className="max-h-72 whitespace-pre-wrap wrap-break-word overflow-y-auto">
-                  {documentText}
-                </pre>
-              ) : (
-                <p className="text-slate-500">
-                  Upload a .docx file and click “Process document” to view its raw contents.
-                </p>
-              )}
-            </div>
-        </div>
-
           <PlaceholderOverview
             placeholders={placeholders}
             answers={answers}
@@ -205,7 +184,7 @@ export default function Home() {
                   : `${answeredCount}/${placeholders.length} confirmed`
                 : "Waiting"}
             </span>
-        </div>
+          </div>
 
           <PlaceholderChat
             placeholder={
