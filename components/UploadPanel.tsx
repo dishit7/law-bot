@@ -49,9 +49,11 @@ export default function UploadPanel({
           </label>
         </div>
         {fileName && (
-          <span className="inline-flex max-w-full items-center rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
-            <span className="truncate">{fileName}</span>
-          </span>
+          <div className="sm:flex-1 sm:min-w-0">
+            <span className="inline-flex w-full items-center rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700 sm:w-auto sm:max-w-full">
+              <span className="truncate">{fileName}</span>
+            </span>
+          </div>
         )}
       </div>
       <button

@@ -145,7 +145,7 @@ export default function Home() {
     <div className="min-h-screen bg-slate-50 py-12">
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-12 px-8 text-slate-900">
         <header className="space-y-3">
-          <h1 className="text-3xl font-semibold text-slate-900">Lexsy Placeholder Assistant</h1>
+          <h1 className="text-3xl font-semibold text-slate-900">Lexsy Legal Document Assistant</h1>
           <p className="text-sm text-slate-600">
             Upload a SAFE draft, let Gemini surface placeholders, fill them conversationally, and
             export a completed document.
