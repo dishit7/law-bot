@@ -2,14 +2,11 @@
 
 import { useState } from "react";
 import type { PlaceholderField } from "@/lib/ai";
-
-type ChatMessage = { role: "ai" | "user"; text: string };
-type PlaceholderStatus = "pending" | "pendingConfirmation" | "confirmed";
-type PlaceholderAnswer = {
-  status: PlaceholderStatus;
-  value: string;
-  conversation: ChatMessage[];
-};
+import type {
+  ChatMessage,
+  PlaceholderAnswer,
+  PlaceholderStatus,
+} from "@/types/placeholders";
 
 type PlaceholderChatProps = {
   placeholder: PlaceholderField | null;

@@ -2,17 +2,18 @@
 
 import { useEffect, useState, type ChangeEvent } from "react";
 import PlaceholderChat from "@/components/PlaceholderChat";
+import UploadPanel from "@/components/UploadPanel";
+import PlaceholderOverview from "@/components/PlaceholderOverview";
+import ReviewPanel from "@/components/ReviewPanel";
 import { detectPlaceholders, type PlaceholderField } from "@/lib/ai";
 import { extractTextFromDocx, generateCompletedDocx } from "@/lib/document";
+import type {
+  ChatMessage,
+  PlaceholderAnswer,
+  PlaceholderStatus,
+} from "@/types/placeholders";
 
 type ProcessStatus = "idle" | "extracting" | "analyzing";
-type ChatMessage = { role: "ai" | "user"; text: string };
-type PlaceholderStatus = "pending" | "pendingConfirmation" | "confirmed";
-type PlaceholderAnswer = {
-  status: PlaceholderStatus;
-  value: string;
-  conversation: ChatMessage[];
-};
 
 export default function Home() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -404,36 +405,15 @@ export default function Home() {
           </p>
         </header>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
-          <h2 className="text-lg font-semibold text-slate-900">1. Upload document</h2>
-          <p className="mt-2 text-sm text-slate-500">
-            Supported format: <span className="font-medium text-slate-700">.docx</span>
-          </p>
-          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <input
-              type="file"
-              accept=".docx"
-              onChange={handleFileChange}
-              disabled={isProcessing}
-              className="text-sm text-slate-700 file:mr-4 file:rounded-md file:border file:border-slate-300 file:bg-slate-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-100"
-            />
-            {fileName && (
-              <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
-                {fileName}
-              </span>
-            )}
-          </div>
-          <button
-            onClick={handleProcessDocument}
-            disabled={!selectedFile || isProcessing}
-            className="mt-5 inline-flex items-center justify-center rounded-md bg-blue-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-slate-300"
-          >
-            {status === "extracting" && "Extracting text..."}
-            {status === "analyzing" && "Analyzing with Gemini..."}
-            {status === "idle" && "Process document"}
-          </button>
-          {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
-        </section>
+        <UploadPanel
+          fileName={fileName}
+          isProcessing={isProcessing}
+          status={status}
+          error={error}
+          onFileChange={handleFileChange}
+          onProcess={handleProcessDocument}
+          hasSelectedFile={Boolean(selectedFile)}
+        />
 
         <section className="grid gap-6 md:grid-cols-2">
           <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
@@ -456,125 +436,13 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-slate-900">
-                3. Detected placeholders
-              </h2>
-              <span className="text-xs uppercase tracking-wide text-slate-400">
-                {placeholders.length} field{placeholders.length === 1 ? "" : "s"}
-              </span>
-            </div>
-            <div className="space-y-3">
-              {placeholders.length === 0 ? (
-                <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
-                  Gemini will list placeholders here after analysis.
-                </p>
-              ) : (
-                <div className="space-y-4">
-                  <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
-                    <div className="flex items-center justify-between text-xs uppercase tracking-wide text-slate-500">
-                      <span>Progress</span>
-                      <span>
-                        {answeredCount}/{placeholders.length} confirmed
-                      </span>
-                    </div>
-                    <div className="mt-2 h-2 rounded-full bg-slate-200">
-                      <div
-                        className="h-2 rounded-full bg-blue-500 transition-all"
-                        style={{
-                          width:
-                            placeholders.length === 0
-                              ? "0%"
-                              : `${Math.round(
-                                  (answeredCount / placeholders.length) * 100,
-                                )}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                  <ul className="space-y-3">
-                    {placeholders.map((field, index) => {
-                      const record = answers[field.id];
-                      const isActive = field.id === activePlaceholderId;
-                      const status = record?.status ?? "pending";
-                      const statusLabel =
-                        status === "confirmed"
-                          ? "Confirmed"
-                          : status === "pendingConfirmation"
-                          ? "Needs confirmation"
-                          : "Pending";
-
-                      return (
-                        <li
-                          key={field.id}
-                          className={`rounded-xl border border-slate-100 bg-slate-50 p-4 text-sm text-slate-700 transition ${isActive ? "ring-2 ring-blue-400" : ""}`}
-                        >
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="flex-1">
-                              <p className="font-semibold text-slate-900">{field.fieldName}</p>
-                              <p className="mt-1 text-slate-600">
-                                Placeholder: {field.placeholder}
-                              </p>
-                              {field.question && (
-                                <p className="mt-1 text-slate-500">
-                                  Question: {field.question}
-                                </p>
-                              )}
-                              {field.example && (
-                                <p className="mt-1 text-slate-500">
-                                  Example: {field.example}
-                                </p>
-                              )}
-                            </div>
-                            <div className="flex flex-col items-end gap-2">
-                              <span
-                                className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                                  status === "confirmed"
-                                    ? "bg-emerald-100 text-emerald-700"
-                                    : status === "pendingConfirmation"
-                                    ? "bg-amber-100 text-amber-700"
-                                    : "bg-slate-100 text-slate-600"
-                                }`}
-                              >
-                                {statusLabel}
-                              </span>
-                              <button
-                                onClick={() => handleJumpToPlaceholder(field.id)}
-                                className="text-xs font-medium text-blue-600 hover:text-blue-500"
-                              >
-                                {isActive ? "Active" : "Open"}
-                              </button>
-                            </div>
-                          </div>
-                          <p className="mt-3 rounded-lg bg-white px-3 py-2 text-sm text-slate-700 shadow-sm">
-                            {record?.value ? (
-                              <span className="font-medium text-slate-900">{record.value}</span>
-                            ) : (
-                              <span className="italic text-slate-500">
-                                Waiting for a confirmed answer.
-                              </span>
-                            )}
-                          </p>
-                          {record?.status === "confirmed" && (
-                            <button
-                              onClick={() => handleJumpToPlaceholder(field.id)}
-                              className="mt-2 text-xs font-medium text-blue-600 hover:text-blue-500"
-                            >
-                              Edit this answer
-                            </button>
-                          )}
-                          <p className="mt-1 text-xs text-slate-400">
-                            Field {index + 1} of {placeholders.length}
-                          </p>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              )}
-            </div>
-          </div>
+          <PlaceholderOverview
+            placeholders={placeholders}
+            answers={answers}
+            activePlaceholderId={activePlaceholderId}
+            answeredCount={answeredCount}
+            onJumpToPlaceholder={handleJumpToPlaceholder}
+          />
         </section>
 
         <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
@@ -613,119 +481,18 @@ export default function Home() {
           />
         </section>
 
-        <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-900">
-              5. Review & download completed document
-            </h2>
-            {placeholders.length > 0 && (
-              <span className="text-xs uppercase tracking-wide text-slate-400">
-                {missingCount === 0
-                  ? "Ready to download"
-                  : `${missingCount} field${missingCount === 1 ? "" : "s"} remaining`}
-              </span>
-            )}
-          </div>
-
-          {placeholders.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
-              Once Gemini detects placeholders and you provide answers, you can review and
-              download the completed SAFE here.
-            </p>
-          ) : (
-            <>
-              <ul className="space-y-3">
-                {placeholders.map((field) => {
-                  const record = answers[field.id];
-                  const status = record?.status ?? "pending";
-                  const value = record?.value ?? "";
-
-                  return (
-                    <li
-                      key={`review-${field.id}`}
-                      className="rounded-xl border border-slate-100 bg-slate-50 p-4 text-sm text-slate-700"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-semibold text-slate-900">{field.fieldName}</p>
-                          <p className="mt-1 text-xs uppercase tracking-wide text-slate-400">
-                            {field.placeholder}
-                          </p>
-                        </div>
-                        <span
-                          className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                            status === "confirmed"
-                              ? "bg-emerald-100 text-emerald-700"
-                              : status === "pendingConfirmation"
-                              ? "bg-amber-100 text-amber-700"
-                              : "bg-yellow-100 text-yellow-700"
-                          }`}
-                        >
-                          {status === "confirmed"
-                            ? "Confirmed"
-                            : status === "pendingConfirmation"
-                            ? "Needs confirmation"
-                            : "Pending"}
-                        </span>
-                      </div>
-                      <p className="mt-3 rounded-lg bg-white px-3 py-2 text-sm text-slate-700 shadow-sm">
-                        {value ? (
-                          <span className="font-medium text-slate-900">{value}</span>
-                        ) : (
-                          <span className="italic text-slate-500">
-                            Awaiting your answer in the chat above.
-                          </span>
-                        )}
-                      </p>
-                      {status === "confirmed" && (
-                        <button
-                          onClick={() => handleJumpToPlaceholder(field.id)}
-                          className="mt-2 text-xs font-medium text-blue-600 hover:text-blue-500"
-                        >
-                          Edit this answer
-                        </button>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-
-              <div className="flex flex-col gap-3 rounded-xl border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
-                {missingCount > 0 ? (
-                  <p>
-                    Confirm the remaining{" "}
-                    <span className="font-semibold text-slate-800">
-                      {missingCount} field{missingCount === 1 ? "" : "s"}
-                    </span>{" "}
-                    via the chat so we can generate a complete document.
-                  </p>
-                ) : (
-                  <p className="text-slate-600">
-                    All placeholders are confirmed. Generate a completed SAFE to download.
-                  </p>
-                )}
-                <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-                  <button
-                    onClick={handleDownloadDocument}
-                    disabled={!canDownload || isGenerating}
-                    className="inline-flex items-center justify-center rounded-md bg-blue-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-slate-300"
-                  >
-                    {isGenerating ? "Preparing download..." : "Generate .docx"}
-                  </button>
-                  <span className="text-xs text-slate-500">
-                    Output filename: <span className="font-medium">{downloadFileName}</span>
-                  </span>
-                </div>
-                {downloadError && (
-                  <p className="text-sm text-red-600">{downloadError}</p>
-                )}
-                {downloadStatus && !downloadError && (
-                  <p className="text-sm text-emerald-600">{downloadStatus}</p>
-                )}
-        </div>
-            </>
-          )}
-        </section>
+        <ReviewPanel
+          placeholders={placeholders}
+          answers={answers}
+          missingCount={missingCount}
+          canDownload={canDownload}
+          downloadFileName={downloadFileName}
+          isGenerating={isGenerating}
+          downloadError={downloadError}
+          downloadStatus={downloadStatus}
+          onDownload={handleDownloadDocument}
+          onJumpToPlaceholder={handleJumpToPlaceholder}
+        />
       </main>
     </div>
   );
