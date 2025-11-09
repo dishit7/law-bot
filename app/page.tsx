@@ -143,7 +143,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-white py-12">
-      <main className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 text-gray-900">
+      <main className="mx-auto flex w-full max-w-7xl flex-col gap-10 px-6 text-gray-900">
         <header className="space-y-2">
           <h1 className="text-3xl font-semibold">Lexsy Placeholder Assistant</h1>
           <p className="text-sm text-gray-600">
@@ -152,74 +152,78 @@ export default function Home() {
           </p>
         </header>
 
-        <UploadPanel
-          fileName={fileName}
-          isProcessing={isProcessing}
-          status={status}
-          error={error}
-          onFileChange={handleFileChange}
-          onProcess={handleProcessDocument}
-          hasSelectedFile={Boolean(selectedFile)}
-        />
+        <section className="space-y-8 lg:grid lg:grid-cols-[minmax(0,3fr)_minmax(400px,1.15fr)] lg:items-start lg:gap-8">
+          <div className="space-y-6">
+            <UploadPanel
+              fileName={fileName}
+              isProcessing={isProcessing}
+              status={status}
+              error={error}
+              onFileChange={handleFileChange}
+              onProcess={handleProcessDocument}
+              hasSelectedFile={Boolean(selectedFile)}
+            />
 
-        <section className="grid gap-6 md:grid-cols-2">
-          <PlaceholderOverview
-            placeholders={placeholders}
-            answers={answers}
-            activePlaceholderId={activePlaceholderId}
-            answeredCount={answeredCount}
-            onJumpToPlaceholder={handleJumpToPlaceholder}
-          />
-        </section>
+            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-gray-900">
+                  4. Chat to fill placeholders
+                </h2>
+                <span className="text-xs uppercase tracking-wide text-gray-500">
+                  {placeholders.length > 0
+                    ? answeredCount === placeholders.length
+                      ? "All placeholders confirmed"
+                      : `${answeredCount}/${placeholders.length} confirmed`
+                    : "Waiting"}
+                </span>
+              </div>
 
-        <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-900">
-              4. Chat to fill placeholders
-            </h2>
-            <span className="text-xs uppercase tracking-wide text-slate-400">
-              {placeholders.length > 0
-                ? answeredCount === placeholders.length
-                  ? "All placeholders confirmed"
-                  : `${answeredCount}/${placeholders.length} confirmed`
-                : "Waiting"}
-            </span>
+              <PlaceholderChat
+                placeholder={
+                  activePlaceholderId
+                    ? placeholders.find((field) => field.id === activePlaceholderId) ?? null
+                    : null
+                }
+                record={activePlaceholderId ? answers[activePlaceholderId] : undefined}
+                onSendMessage={handleSendMessage}
+                onConfirm={handleConfirmActiveAnswer}
+                onEdit={handleEditActiveAnswer}
+                isLoading={chatLoading}
+                error={chatError}
+                totalCount={placeholders.length}
+                currentIndex={
+                  activePlaceholderId
+                    ? placeholders.findIndex((field) => field.id === activePlaceholderId) + 1
+                    : null
+                }
+                allConfirmed={answeredCount === placeholders.length && placeholders.length > 0}
+              />
+            </div>
+
+            <ReviewPanel
+              placeholders={placeholders}
+              answers={answers}
+              missingCount={missingCount}
+              canDownload={canDownload}
+              downloadFileName={downloadFileName}
+              isGenerating={isGenerating}
+              downloadError={downloadError}
+              downloadStatus={downloadStatus}
+              onDownload={handleDownloadDocument}
+              onJumpToPlaceholder={handleJumpToPlaceholder}
+            />
           </div>
 
-          <PlaceholderChat
-            placeholder={
-              activePlaceholderId
-                ? placeholders.find((field) => field.id === activePlaceholderId) ?? null
-                : null
-            }
-            record={activePlaceholderId ? answers[activePlaceholderId] : undefined}
-            onSendMessage={handleSendMessage}
-            onConfirm={handleConfirmActiveAnswer}
-            onEdit={handleEditActiveAnswer}
-            isLoading={chatLoading}
-            error={chatError}
-            totalCount={placeholders.length}
-            currentIndex={
-              activePlaceholderId
-                ? placeholders.findIndex((field) => field.id === activePlaceholderId) + 1
-                : null
-            }
-            allConfirmed={answeredCount === placeholders.length && placeholders.length > 0}
-          />
+          <div className="space-y-6">
+            <PlaceholderOverview
+              placeholders={placeholders}
+              answers={answers}
+              activePlaceholderId={activePlaceholderId}
+              answeredCount={answeredCount}
+              onJumpToPlaceholder={handleJumpToPlaceholder}
+            />
+          </div>
         </section>
-
-        <ReviewPanel
-          placeholders={placeholders}
-          answers={answers}
-          missingCount={missingCount}
-          canDownload={canDownload}
-          downloadFileName={downloadFileName}
-          isGenerating={isGenerating}
-          downloadError={downloadError}
-          downloadStatus={downloadStatus}
-          onDownload={handleDownloadDocument}
-          onJumpToPlaceholder={handleJumpToPlaceholder}
-        />
       </main>
     </div>
   );
