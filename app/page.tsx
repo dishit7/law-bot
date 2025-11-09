@@ -1,33 +1,51 @@
 'use client';
 
-import {
-  useEffect,
-  useMemo,
-  useState,
-  type ChangeEvent,
-  type FormEvent,
-} from "react";
+import { useEffect, useState, type ChangeEvent } from "react";
+import PlaceholderChat from "@/components/PlaceholderChat";
 import { detectPlaceholders, type PlaceholderField } from "@/lib/ai";
 import { extractTextFromDocx, generateCompletedDocx } from "@/lib/document";
 
 type ProcessStatus = "idle" | "extracting" | "analyzing";
 type ChatMessage = { role: "ai" | "user"; text: string };
+type PlaceholderStatus = "pending" | "pendingConfirmation" | "confirmed";
+type PlaceholderAnswer = {
+  status: PlaceholderStatus;
+  value: string;
+  conversation: ChatMessage[];
+};
 
 export default function Home() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState<string>("");
   const [documentText, setDocumentText] = useState<string>("");
   const [placeholders, setPlaceholders] = useState<PlaceholderField[]>([]);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [chatInput, setChatInput] = useState<string>("");
-  const [currentFieldIndex, setCurrentFieldIndex] = useState<number>(0);
+  const [answers, setAnswers] = useState<Record<string, PlaceholderAnswer>>({});
+  const [activePlaceholderId, setActivePlaceholderId] = useState<string | null>(null);
   const [status, setStatus] = useState<ProcessStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const [documentBuffer, setDocumentBuffer] = useState<ArrayBuffer | null>(null);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [downloadStatus, setDownloadStatus] = useState<string | null>(null);
+  const [chatLoading, setChatLoading] = useState<boolean>(false);
+  const [chatError, setChatError] = useState<string | null>(null);
+
+  const confirmedAnswersMap = placeholders.reduce<Record<string, string>>(
+    (acc, field) => {
+      const record = answers[field.id];
+      if (record?.status === "confirmed" && record.value.trim()) {
+        acc[field.id] = record.value.trim();
+      }
+      return acc;
+    },
+    {},
+  );
+
+  const answeredCount = Object.keys(confirmedAnswersMap).length;
+
+  const downloadFileName = fileName
+    ? fileName.replace(/\.docx$/i, "_completed.docx")
+    : "lexsy-completed-safe.docx";
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -42,14 +60,13 @@ export default function Home() {
     setDocumentText("");
     setPlaceholders([]);
     setAnswers({});
-    setMessages([]);
-    setChatInput("");
-    setCurrentFieldIndex(0);
+    setActivePlaceholderId(null);
     setDocumentBuffer(null);
     setDownloadError(null);
     setDownloadStatus(null);
     setIsGenerating(false);
     setError(null);
+    setChatError(null);
   };
 
   const handleProcessDocument = async () => {
@@ -74,13 +91,27 @@ export default function Home() {
       const detected = await detectPlaceholders(text);
       setPlaceholders(detected);
 
+      const initialAnswers = detected.reduce<Record<string, PlaceholderAnswer>>(
+        (acc, field) => {
+          acc[field.id] = {
+            status: "pending",
+            value: "",
+            conversation: [],
+          };
+          return acc;
+        },
+        {},
+      );
+
+      setAnswers(initialAnswers);
+      setActivePlaceholderId(detected[0]?.id ?? null);
+
       if (detected.length === 0) {
-        setMessages([
-          {
-            role: "ai" as const,
-            text: "I couldn't find any placeholders in this document. Feel free to review the text above.",
-          },
-        ]);
+        setChatError(
+          "I couldn't find any placeholders in this document. Feel free to review the text above.",
+        );
+      } else {
+        setChatError(null);
       }
     } catch (err) {
       console.error(err);
@@ -92,51 +123,28 @@ export default function Home() {
     }
   };
 
-  const handleChatSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!chatInput.trim() || currentFieldIndex >= placeholders.length) {
-      return;
-    }
-
-    const answer = chatInput.trim();
-    const field = placeholders[currentFieldIndex];
-    const nextIndex = currentFieldIndex + 1;
-
-    setMessages((prev) => {
-      const updated: ChatMessage[] = [...prev, { role: "user" as const, text: answer }];
-      if (nextIndex >= placeholders.length) {
-        updated.push({
-          role: "ai" as const,
-          text: "Great, we’ve captured details for every placeholder. Review them on the right.",
-        });
-      } else {
-        const nextField = placeholders[nextIndex];
-        updated.push({
-          role: "ai" as const,
-          text:
-            nextField.question ??
-            `Next up, what should I use for ${nextField.fieldName}?`,
-        });
+  const updateAnswerRecord = (
+    placeholderId: string,
+    updater: (current: PlaceholderAnswer) => PlaceholderAnswer,
+  ) => {
+    setAnswers((prev) => {
+      const current = prev[placeholderId];
+      if (!current) {
+        return prev;
       }
-      return updated;
+      return {
+        ...prev,
+        [placeholderId]: updater(current),
+      };
     });
-
-    setAnswers((prev) => ({ ...prev, [field.id]: answer }));
-    setChatInput("");
-    setCurrentFieldIndex(nextIndex);
   };
 
-  const answeredCount = useMemo(
-    () => placeholders.filter((field) => answers[field.id]?.trim()).length,
-    [answers, placeholders],
-  );
-
-  const downloadFileName = useMemo(() => {
-    if (!fileName) {
-      return "lexsy-completed-safe.docx";
-    }
-    return fileName.replace(/\.docx$/i, "_completed.docx");
-  }, [fileName]);
+  const appendMessage = (placeholderId: string, message: ChatMessage) => {
+    updateAnswerRecord(placeholderId, (current) => ({
+      ...current,
+      conversation: [...current.conversation, message],
+    }));
+  };
 
   const handleDownloadDocument = async () => {
     if (!documentBuffer) {
@@ -151,13 +159,18 @@ export default function Home() {
       return;
     }
 
+    if (Object.keys(confirmedAnswersMap).length !== placeholders.length) {
+      setDownloadError("Please confirm every placeholder before downloading.");
+      return;
+    }
+
     try {
       setIsGenerating(true);
       setDownloadError(null);
       await generateCompletedDocx({
         buffer: documentBuffer,
         placeholders,
-        answers,
+        answers: confirmedAnswersMap,
         fileName: downloadFileName,
       });
       setDownloadStatus("Download started. Check your downloads folder.");
@@ -173,35 +186,212 @@ export default function Home() {
     }
   };
 
-  const isProcessing = status !== "idle";
-  const chatActive = placeholders.length > 0;
-  const chatComplete = chatActive && answeredCount === placeholders.length && placeholders.length > 0;
-  const missingCount = Math.max(placeholders.length - answeredCount, 0);
-  const canDownload =
-    chatComplete && Boolean(documentBuffer) && placeholders.length > 0;
-
-  useEffect(() => {
-    if (!chatActive || messages.length > 0) {
+  const handleSendMessage = async (message: string) => {
+    if (!activePlaceholderId) {
       return;
     }
 
-    const firstField = placeholders[0];
-    setMessages([
-      {
-        role: "ai" as const,
-        text:
-          placeholders.length === 1
-            ? `I found 1 placeholder to fill. ${
-                firstField.question ??
-                `Tell me the value for ${firstField.fieldName}.`
-              }`
-            : `I found ${placeholders.length} placeholders to fill. ${
-                firstField.question ??
-                `Let’s start with the ${firstField.fieldName}.`
-              }`,
-      },
-    ]);
-  }, [chatActive, messages.length, placeholders]);
+    const trimmed = message.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    const placeholder = placeholders.find((field) => field.id === activePlaceholderId);
+    const record = answers[activePlaceholderId];
+
+    if (!placeholder || !record) {
+      return;
+    }
+
+    const conversationForLLM = [
+      ...record.conversation,
+      { role: "user" as const, text: trimmed },
+    ];
+
+    appendMessage(activePlaceholderId, { role: "user", text: trimmed });
+    setChatError(null);
+    setChatLoading(true);
+
+    try {
+      const response = await fetch("/api/chat-fill", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          placeholder,
+          message: trimmed,
+          conversation: conversationForLLM,
+          confirmedAnswers: confirmedAnswersMap,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("The assistant couldn't parse that. Please try again.");
+      }
+
+      const payload: {
+        answer?: string;
+        followUp?: string | null;
+      } = await response.json();
+
+      const proposedAnswer = payload.answer?.trim() ?? "";
+      const followUp =
+        payload.followUp?.trim() ||
+        (proposedAnswer
+          ? `I'll set ${placeholder.fieldName} to "${proposedAnswer}". Does that look right?`
+          : `I couldn't determine the value yet. Can you clarify the ${placeholder.fieldName}?`);
+
+      appendMessage(activePlaceholderId, {
+        role: "ai",
+        text: followUp,
+      });
+
+      if (proposedAnswer) {
+        updateAnswerRecord(activePlaceholderId, (current) => ({
+          ...current,
+          status: "pendingConfirmation",
+          value: proposedAnswer,
+        }));
+      } else {
+        updateAnswerRecord(activePlaceholderId, (current) => ({
+          ...current,
+          status: "pending",
+        }));
+      }
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Sorry, I ran into an issue. Please try rephrasing your answer.";
+      setChatError(message);
+      appendMessage(activePlaceholderId, {
+        role: "ai",
+        text: message,
+      });
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  const handleConfirmActiveAnswer = () => {
+    if (!activePlaceholderId) {
+      return;
+    }
+
+    updateAnswerRecord(activePlaceholderId, (current) => ({
+      ...current,
+      status: "confirmed",
+    }));
+    appendMessage(activePlaceholderId, {
+      role: "ai",
+      text: "Great! I've logged that answer.",
+    });
+
+    const nextPending = placeholders.find((field) => {
+      if (field.id === activePlaceholderId) {
+        return false;
+      }
+      const record = answers[field.id];
+      return !record || record.status !== "confirmed";
+    });
+
+    setActivePlaceholderId(nextPending?.id ?? null);
+  };
+
+  const handleEditActiveAnswer = () => {
+    if (!activePlaceholderId) {
+      return;
+    }
+
+    updateAnswerRecord(activePlaceholderId, (current) => ({
+      ...current,
+      status: "pending",
+    }));
+    appendMessage(activePlaceholderId, {
+      role: "ai",
+      text: "No problem—let's update that. What's the correct value?",
+    });
+  };
+
+  const handleJumpToPlaceholder = (placeholderId: string) => {
+    setActivePlaceholderId(placeholderId);
+    setChatError(null);
+  };
+
+  useEffect(() => {
+    if (placeholders.length === 0) {
+      if (activePlaceholderId !== null) {
+        setActivePlaceholderId(null);
+      }
+      return;
+    }
+
+    const firstPending = placeholders.find((field) => {
+      const record = answers[field.id];
+      return !record || record.status !== "confirmed";
+    });
+
+    if (!activePlaceholderId) {
+      const nextId = firstPending?.id ?? null;
+      if (nextId !== activePlaceholderId) {
+        setActivePlaceholderId(nextId);
+      }
+      return;
+    }
+
+    const currentRecord = answers[activePlaceholderId];
+    if (currentRecord?.status === "confirmed") {
+      const nextId = firstPending?.id ?? null;
+      if (nextId !== activePlaceholderId) {
+        setActivePlaceholderId(nextId);
+      }
+    }
+  }, [activePlaceholderId, answers, placeholders]);
+
+  useEffect(() => {
+    if (!activePlaceholderId) {
+      return;
+    }
+
+    const record = answers[activePlaceholderId];
+    const placeholder = placeholders.find((field) => field.id === activePlaceholderId);
+
+    if (!record || !placeholder) {
+      return;
+    }
+
+    if (record.conversation.length > 0 || record.status !== "pending") {
+      return;
+    }
+
+    const question =
+      placeholder.question ??
+      `What is the correct value for ${placeholder.fieldName}?`;
+
+    setAnswers((prev) => {
+      const current = prev[activePlaceholderId];
+      if (!current) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [activePlaceholderId]: {
+          ...current,
+          conversation: [...current.conversation, { role: "ai", text: question }],
+        },
+      };
+    });
+  }, [activePlaceholderId, answers, placeholders]);
+
+  const isProcessing = status !== "idle";
+  const chatActive = placeholders.length > 0;
+  const missingCount = Math.max(placeholders.length - answeredCount, 0);
+  const canDownload =
+    placeholders.length > 0 &&
+    missingCount === 0 &&
+    Object.keys(confirmedAnswersMap).length === placeholders.length &&
+    Boolean(documentBuffer);
 
   return (
     <div className="min-h-screen bg-slate-100 py-12">
@@ -286,7 +476,7 @@ export default function Home() {
                     <div className="flex items-center justify-between text-xs uppercase tracking-wide text-slate-500">
                       <span>Progress</span>
                       <span>
-                        {answeredCount}/{placeholders.length} filled
+                        {answeredCount}/{placeholders.length} confirmed
                       </span>
                     </div>
                     <div className="mt-2 h-2 rounded-full bg-slate-200">
@@ -304,29 +494,82 @@ export default function Home() {
                     </div>
                   </div>
                   <ul className="space-y-3">
-                    {placeholders.map((field) => (
-                      <li
-                        key={field.id}
-                        className="rounded-xl border border-slate-100 bg-slate-50 p-4 text-sm text-slate-700"
-                      >
-                        <p className="font-semibold text-slate-900">{field.fieldName}</p>
-                        <p className="mt-1 text-slate-600">Placeholder: {field.placeholder}</p>
-                        {field.question && (
-                          <p className="mt-1 text-slate-500">Question: {field.question}</p>
-                        )}
-                        {field.example && (
-                          <p className="mt-1 text-slate-500">Example: {field.example}</p>
-                        )}
-                        {answers[field.id] && (
-                          <p className="mt-3 rounded-lg bg-white p-2 text-slate-600">
-                            Answer:{" "}
-                            <span className="font-medium text-slate-800">
-                              {answers[field.id]}
-                            </span>
+                    {placeholders.map((field, index) => {
+                      const record = answers[field.id];
+                      const isActive = field.id === activePlaceholderId;
+                      const status = record?.status ?? "pending";
+                      const statusLabel =
+                        status === "confirmed"
+                          ? "Confirmed"
+                          : status === "pendingConfirmation"
+                          ? "Needs confirmation"
+                          : "Pending";
+
+                      return (
+                        <li
+                          key={field.id}
+                          className={`rounded-xl border border-slate-100 bg-slate-50 p-4 text-sm text-slate-700 transition ${isActive ? "ring-2 ring-blue-400" : ""}`}
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1">
+                              <p className="font-semibold text-slate-900">{field.fieldName}</p>
+                              <p className="mt-1 text-slate-600">
+                                Placeholder: {field.placeholder}
+                              </p>
+                              {field.question && (
+                                <p className="mt-1 text-slate-500">
+                                  Question: {field.question}
+                                </p>
+                              )}
+                              {field.example && (
+                                <p className="mt-1 text-slate-500">
+                                  Example: {field.example}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex flex-col items-end gap-2">
+                              <span
+                                className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                  status === "confirmed"
+                                    ? "bg-emerald-100 text-emerald-700"
+                                    : status === "pendingConfirmation"
+                                    ? "bg-amber-100 text-amber-700"
+                                    : "bg-slate-100 text-slate-600"
+                                }`}
+                              >
+                                {statusLabel}
+                              </span>
+                              <button
+                                onClick={() => handleJumpToPlaceholder(field.id)}
+                                className="text-xs font-medium text-blue-600 hover:text-blue-500"
+                              >
+                                {isActive ? "Active" : "Open"}
+                              </button>
+                            </div>
+                          </div>
+                          <p className="mt-3 rounded-lg bg-white px-3 py-2 text-sm text-slate-700 shadow-sm">
+                            {record?.value ? (
+                              <span className="font-medium text-slate-900">{record.value}</span>
+                            ) : (
+                              <span className="italic text-slate-500">
+                                Waiting for a confirmed answer.
+                              </span>
+                            )}
                           </p>
-                        )}
-                      </li>
-                    ))}
+                          {record?.status === "confirmed" && (
+                            <button
+                              onClick={() => handleJumpToPlaceholder(field.id)}
+                              className="mt-2 text-xs font-medium text-blue-600 hover:text-blue-500"
+                            >
+                              Edit this answer
+                            </button>
+                          )}
+                          <p className="mt-1 text-xs text-slate-400">
+                            Field {index + 1} of {placeholders.length}
+                          </p>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               )}
@@ -340,69 +583,34 @@ export default function Home() {
               4. Chat to fill placeholders
             </h2>
             <span className="text-xs uppercase tracking-wide text-slate-400">
-              {chatActive
-                ? `Step ${Math.min(currentFieldIndex + 1, placeholders.length)} of ${
-                    placeholders.length
-                  }`
+              {placeholders.length > 0
+                ? answeredCount === placeholders.length
+                  ? "All placeholders confirmed"
+                  : `${answeredCount}/${placeholders.length} confirmed`
                 : "Waiting"}
             </span>
           </div>
 
-          {!chatActive ? (
-            <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
-              Upload a document and process it to begin the conversational fill experience.
-            </p>
-          ) : (
-            <>
-              <div className="space-y-3 rounded-xl border border-slate-100 bg-slate-50 p-4 text-sm text-slate-700">
-                {messages.map((message, index) => (
-                  <div key={`${message.role}-${index}`} className="flex flex-col gap-1">
-                    <span
-                      className={`text-xs font-semibold uppercase tracking-wide ${
-                        message.role === "ai" ? "text-blue-600" : "text-slate-500"
-                      }`}
-                    >
-                      {message.role === "ai" ? "Lexsy Assistant" : "You"}
-                    </span>
-                    <p className="rounded-lg bg-white/80 px-3 py-2 text-slate-700 shadow-sm">
-                      {message.text}
-                    </p>
-                  </div>
-                ))}
-                {messages.length === 0 && (
-                  <p className="text-slate-500">
-                    Gemini is preparing your questions. This will only take a moment.
-                  </p>
-                )}
-              </div>
-
-              <form
-                onSubmit={handleChatSubmit}
-                className="flex flex-col gap-3 sm:flex-row sm:items-center"
-              >
-                <input
-                  type="text"
-                  value={chatInput}
-                  onChange={(event) => setChatInput(event.target.value)}
-                  placeholder={
-                    currentFieldIndex >= placeholders.length
-                      ? "All placeholders filled!"
-                      : placeholders[currentFieldIndex].question ??
-                        `Provide a value for ${placeholders[currentFieldIndex].fieldName}`
-                  }
-                  disabled={chatComplete}
-                  className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
-                />
-                <button
-                  type="submit"
-                  disabled={chatComplete || !chatInput.trim()}
-                  className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-slate-300"
-                >
-                  {chatComplete ? "Completed" : "Send"}
-                </button>
-              </form>
-            </>
-          )}
+          <PlaceholderChat
+            placeholder={
+              activePlaceholderId
+                ? placeholders.find((field) => field.id === activePlaceholderId) ?? null
+                : null
+            }
+            record={activePlaceholderId ? answers[activePlaceholderId] : undefined}
+            onSendMessage={handleSendMessage}
+            onConfirm={handleConfirmActiveAnswer}
+            onEdit={handleEditActiveAnswer}
+            isLoading={chatLoading}
+            error={chatError}
+            totalCount={placeholders.length}
+            currentIndex={
+              activePlaceholderId
+                ? placeholders.findIndex((field) => field.id === activePlaceholderId) + 1
+                : null
+            }
+            allConfirmed={answeredCount === placeholders.length && placeholders.length > 0}
+          />
         </section>
 
         <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
@@ -428,7 +636,10 @@ export default function Home() {
             <>
               <ul className="space-y-3">
                 {placeholders.map((field) => {
-                  const value = answers[field.id];
+                  const record = answers[field.id];
+                  const status = record?.status ?? "pending";
+                  const value = record?.value ?? "";
+
                   return (
                     <li
                       key={`review-${field.id}`}
@@ -443,12 +654,18 @@ export default function Home() {
                         </div>
                         <span
                           className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                            value
+                            status === "confirmed"
                               ? "bg-emerald-100 text-emerald-700"
+                              : status === "pendingConfirmation"
+                              ? "bg-amber-100 text-amber-700"
                               : "bg-yellow-100 text-yellow-700"
                           }`}
                         >
-                          {value ? "Filled" : "Pending"}
+                          {status === "confirmed"
+                            ? "Confirmed"
+                            : status === "pendingConfirmation"
+                            ? "Needs confirmation"
+                            : "Pending"}
                         </span>
                       </div>
                       <p className="mt-3 rounded-lg bg-white px-3 py-2 text-sm text-slate-700 shadow-sm">
@@ -460,6 +677,14 @@ export default function Home() {
                           </span>
                         )}
                       </p>
+                      {status === "confirmed" && (
+                        <button
+                          onClick={() => handleJumpToPlaceholder(field.id)}
+                          className="mt-2 text-xs font-medium text-blue-600 hover:text-blue-500"
+                        >
+                          Edit this answer
+                        </button>
+                      )}
                     </li>
                   );
                 })}
@@ -468,7 +693,7 @@ export default function Home() {
               <div className="flex flex-col gap-3 rounded-xl border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
                 {missingCount > 0 ? (
                   <p>
-                    Fill in the remaining{" "}
+                    Confirm the remaining{" "}
                     <span className="font-semibold text-slate-800">
                       {missingCount} field{missingCount === 1 ? "" : "s"}
                     </span>{" "}
@@ -476,7 +701,7 @@ export default function Home() {
                   </p>
                 ) : (
                   <p className="text-slate-600">
-                    All placeholders are filled. Generate a completed SAFE to download.
+                    All placeholders are confirmed. Generate a completed SAFE to download.
                   </p>
                 )}
                 <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
@@ -497,7 +722,7 @@ export default function Home() {
                 {downloadStatus && !downloadError && (
                   <p className="text-sm text-emerald-600">{downloadStatus}</p>
                 )}
-              </div>
+        </div>
             </>
           )}
         </section>
