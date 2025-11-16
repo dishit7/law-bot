@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { google } from "@ai-sdk/google";
 import { generateText } from "ai";
 
-const MODEL_NAME = "gemini-2.0-flash-exp";
+const MODEL_NAME = "gemini-2.0-flash";
 
 const SYSTEM_PROMPT = `You analyze legal documents and identify template placeholders.
 

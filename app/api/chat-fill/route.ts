@@ -18,7 +18,7 @@ type ChatFillRequest = {
   confirmedAnswers?: Record<string, string>;
 };
 
-const MODEL_NAME = "gemini-2.0-flash-exp";
+const MODEL_NAME = "gemini-2.0-flash";
 
 export async function POST(request: Request) {
   try {
